@@ -79,7 +79,6 @@ cd pdal_conversion_s3_batch/dev
 2. Build container
 
 ```
-export LAMBDA_DOCKER_IMAGE_NAME=lambda-docker-batch:test
 export LAMBDA_DOCKER_REPO_NAME=lambda-docker-batch
 docker buildx build --platform linux/amd64 --provenance=false -t "$LAMBDA_DOCKER_REPO_NAME" .
 ```
@@ -88,7 +87,7 @@ docker buildx build --platform linux/amd64 --provenance=false -t "$LAMBDA_DOCKER
 
 ```
 export ECR_REGISTRY={accountId}.dkr.ecr.{region}.amazonaws.com
-docker tag "$LAMBDA_DOCKER_IMAGE_NAME" "$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME"
+docker tag "$LAMBDA_DOCKER_REPO_NAME" "$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME"
 aws ecr get-login-password | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 aws ecr create-repository --repository-name "$LAMBDA_DOCKER_REPO_NAME"
 docker push "$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME:latest"
@@ -97,6 +96,8 @@ docker push "$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME:latest"
 4. Create/Update Lambda Function Code
 
 **Create**
+
+You will need to [create a Lambda Role](https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html) that has basic Lambda permissions and access to the S3 target and source buckets/folders.
 
 ```
 export LAMBDA_IAM_ROLE=arn:aws:iam::{accountid}:role/role-name
@@ -113,17 +114,13 @@ aws lambda create-function \
   --timeout "$LAMBDA_TIMEOUT" \
   --memory-size "$LAMBDA_MEMORY" \
   --ephemeral-storage Size="$LAMBDA_STORAGE" \
-  --environment Variables='{
-    "S3_TARGET_FOLDER":"'$S3_TARGET_FOLDER'",
-    "S3_TARGET_BUCKET":"'$S3_TARGET_BUCKET'",
-    "HOME":"/tmp"
-  }'
+  --environment "Variables={S3_TARGET_FOLDER=$S3_TARGET_FOLDER,S3_TARGET_BUCKET=$S3_TARGET_BUCKET,HOME=/tmp}"
 ```
 
 **Update**
 
 ```
-aws lambda update-function-code --function-name "$LAMBDA_DOCKER_REPO_NAME" --package-type Image --code ImageUri="$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME:latest" --publish
+aws lambda update-function-code --function-name "$LAMBDA_DOCKER_REPO_NAME" --image-uri "$ECR_REGISTRY/$LAMBDA_DOCKER_REPO_NAME:latest" --publish
 ```
 
 ## Conversion Pipeline
